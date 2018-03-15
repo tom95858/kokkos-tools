@@ -1,4 +1,3 @@
-
 #ifndef _H_KOKKOSP_KERNEL_INFO
 #define _H_KOKKOSP_KERNEL_INFO
 
@@ -25,9 +24,9 @@ class KernelPerformanceInfo {
 	public:
 		KernelPerformanceInfo(std::string kName, KernelExecutionType kernelType) :
 			kType(kernelType) {
-			
+
 			kernelName = (char*) malloc(sizeof(char) * (kName.size() + 1));
-			regionName = "";
+			regionName = (char *)"";
 			strcpy(kernelName, kName.c_str());
 
 			callCount = 0;
@@ -76,24 +75,24 @@ class KernelPerformanceInfo {
 		char* getName() {
 			return kernelName;
 		}
-		
+
 		void addCallCount(const uint64_t newCalls) {
 			callCount += newCalls;
 		}
-		
+
 		bool readFromFile(FILE* input) {
 			uint32_t recordLen = 0;
 			uint32_t actual_read = fread(&recordLen, sizeof(recordLen), 1, input);
-	                if(actual_read != 1) return false;
+			if(actual_read != 1) return false;
 
 			char* entry = (char*) malloc(recordLen);
-                        fread(entry, recordLen, 1, input);
+			fread(entry, recordLen, 1, input);
 
 			uint32_t nextIndex = 0;
 			uint32_t kernelNameLength;
 			copy((char*) &kernelNameLength, &entry[nextIndex], sizeof(kernelNameLength));
 			nextIndex += sizeof(kernelNameLength);
-			
+
 			if(strlen(kernelName) > 0) {
 				free(kernelName);
 			}
@@ -102,20 +101,20 @@ class KernelPerformanceInfo {
 			copy(kernelName, &entry[nextIndex], kernelNameLength);
 			kernelName[kernelNameLength] = '\0';
 			nextIndex += kernelNameLength;
-			
+
 			copy((char*) &callCount, &entry[nextIndex], sizeof(callCount));
 			nextIndex += sizeof(callCount);
-			
+
 			copy((char*) &time, &entry[nextIndex], sizeof(time));
 			nextIndex += sizeof(time);
-			
+
 			copy((char*) &timeSq, &entry[nextIndex], sizeof(timeSq));
 			nextIndex += sizeof(timeSq);
-			
+
 			uint32_t kernelT = 0;
 			copy((char*) &kernelT, &entry[nextIndex], sizeof(kernelT));
 			nextIndex += sizeof(kernelT);
-			
+
 			if(kernelT == 0) {
 				kType = PARALLEL_FOR;
 			} else if(kernelT == 1) {
@@ -123,28 +122,28 @@ class KernelPerformanceInfo {
 			} else if(kernelT == 2) {
 				kType = PARALLEL_SCAN;
 			}
-			
+
 			free(entry);
-                        return true;
+			return true;
 		}
-		
+
 		void writeToFile(FILE* output, char* indent) {
 			fprintf(output, "%s{\n", indent);
-			
+
 			char* indentBuffer = (char*) malloc( sizeof(char) * 256 );
 			sprintf(indentBuffer, "%s    ", indent);
-		
+
 			fprintf(output, "%s\"kernel-name\"    : \"%s\",\n", indentBuffer, kernelName);
 			fprintf(output, "%s\"region\"         : \"%s\",\n", indentBuffer, regionName);
 			fprintf(output, "%s\"call-count\"     : %lu,\n", indentBuffer, callCount);
 			fprintf(output, "%s\"total-time\"     : %f,\n", indentBuffer, time);
-			fprintf(output, "%s\"time-per-call\"  : %16.8f,\n", indentBuffer, (time / 
+			fprintf(output, "%s\"time-per-call\"  : %.8f,\n", indentBuffer, (time /
 				static_cast<double>(std::max(
 					static_cast<uint64_t>(1), callCount))));
-			fprintf(output, "%s\"kernel-type\"    : \"%s\",\n", indentBuffer,
+			fprintf(output, "%s\"kernel-type\"    : \"%s\"\n", indentBuffer,
 				(kType == PARALLEL_FOR) ? "PARALLEL-FOR" :
 				(kType == PARALLEL_REDUCE) ? "PARALLEL-REDUCE" : "PARALLEL-SCAN");
-			
+
 			fprintf(output, "%s}", indent);
 		}
 
@@ -154,7 +153,7 @@ class KernelPerformanceInfo {
 				dest[i] = src[i];
 			}
 		}
-	
+
 		char* kernelName;
 		char* regionName;
 		uint64_t callCount;
