@@ -65,7 +65,7 @@ struct av_s {
 	const char *av_name;
 	char *av_value;
 } av_dict[] = {
-	{ "APP_ID" },
+	{ "JOB_APP_ID" },
 	{ "JOB_END" },
 	{ "JOB_EXIT" },
 	{ "JOB_ID" },
@@ -73,7 +73,7 @@ struct av_s {
 	{ "JOB_START" },
 	{ "JOB_STATUS" },
 	{ "JOB_USER" },
-	{ "USER_ID" },
+	{ "JOB_USER_ID" },
 };
 #define AV_DICT_LEN (sizeof(av_dict) / sizeof(av_dict[0]))
 
@@ -174,9 +174,9 @@ extern "C" void kokkosp_finalize_library() {
 	fprintf(output_data, "    \"job-id\"                 : %s,\n",
 		job_data("JOB_ID", "0"));
 	fprintf(output_data, "    \"app-id\"                 : %s,\n",
-		job_data("APP_ID", "0"));
+		job_data("JOB_APP_ID", "0"));
 	fprintf(output_data, "    \"user-id\"                : %s,\n",
-		job_data("USER_ID", "0"));
+		job_data("JOB_USER_ID", "0"));
 	fprintf(output_data, "    \"start-time\"             : %s,\n",
 		job_data("JOB_START", "0"));
 	fprintf(output_data, "    \"inst-data\"              : \"%s\",\n",
