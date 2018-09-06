@@ -97,6 +97,7 @@ static const char *job_data(const char *name, const char *default_value)
 
 static void read_job_data()
 {
+	char buf[2048];
 	const char *job_file_path = getenv("LDMS_JOBINFO_DATA_FILE");
 	if (!job_file_path)
 		job_file_path = "/var/run/ldms_jobinfo.data";
@@ -111,16 +112,24 @@ static void read_job_data()
 		av_dict[i].av_value = NULL;
 	}
 
-	char buf[80];
 	char *s, *p;
 	while (NULL != (s = fgets(buf, sizeof(buf), job_file))) {
-		char *name = strtok_r(s, "=", &p);
-		char *value = strtok_r(NULL, "=", &p);
+		char *name, *value;
 		struct av_s key;
+		struct av_s *av;
+
+		if (s[0] == '\0' || s[0] == '\n')
+			continue;
+
+		while (isspace(*s))
+			s++;
+
+		name = strtok_r(s, "=", &p);
+		value = strtok_r(NULL, "=", &p);
 		key.av_name = name;
-		struct av_s *av = (struct av_s *)bsearch(&key, av_dict,
-							 AV_DICT_LEN, sizeof(*av),
-							 av_cmp_fn);
+		av = (struct av_s *)bsearch(&key, av_dict,
+					    AV_DICT_LEN, sizeof(*av),
+					    av_cmp_fn);
 		if (av) {
 			/* skip leading \" */
 			while (*value == '"')
@@ -139,21 +148,39 @@ static void read_job_data()
 extern "C" void kokkosp_finalize_library() {
 	double finishTime = seconds();
 	double kernelTimes = 0;
-
-	char* mpi_rank = getenv("OMPI_COMM_WORLD_RANK");
-
+	char* mpiRank = getenv("OMPI_COMM_WORLD_RANK");
+	char* procId = getenv("SLURM_PROCID");
+	char* componentId = getenv("LDMS_COMPONENT_ID");
 	char* inst_data = getenv("LDMS_INSTANCE_DATA");
 	char* upload_url = getenv("LDMS_UPLOAD_URL");
-	printf("upload_url=%s\n", upload_url);
 	char* hostname = (char*) malloc(sizeof(char) * 256);
 
 	gethostname(hostname, 256);
 
-	char* fileOutput = (char*) malloc(sizeof(char) * 256);
-	sprintf(fileOutput, "%s-%d-%s.json", hostname, (int) getpid(),
-		(NULL == mpi_rank) ? "0" : mpi_rank);
+	uint64_t mpi_rank;
+	if (mpiRank)
+		mpi_rank = strtoul(mpiRank, NULL, 0);
+	else if (procId)
+		mpi_rank = strtoul(procId, NULL, 0);
+	else
+		mpi_rank = 0;
 
-	free(hostname);
+	uint64_t component_id;
+	if (componentId)
+		component_id = strtoul(componentId, NULL, 0);
+	else
+		component_id = 0;
+
+	int keep_file;
+	char *keepFile = getenv("KOKKOS_KEEP_JSON_FILE");
+	if (keepFile)
+		keep_file = atoi(keepFile);
+	else
+		keep_file = 0;
+
+	char* fileOutput = (char*) malloc(sizeof(char) * 256);
+	sprintf(fileOutput, "%s-%d-%ld.json", hostname, (int) getpid(), mpi_rank);
+
 	FILE* output_data = fopen(fileOutput, "w");
 
 	const double totalExecuteTime = (finishTime - initTime);
@@ -181,12 +208,15 @@ extern "C" void kokkosp_finalize_library() {
 		job_data("JOB_START", "0"));
 	fprintf(output_data, "    \"inst-data\"              : \"%s\",\n",
 		inst_data ? inst_data : job_data("JOB_NAME", ""));
-	fprintf(output_data, "    \"mpi-rank\"               : %s,\n",
-		(NULL == mpi_rank) ? "0" : mpi_rank);
+	fprintf(output_data, "    \"component-id\"           : %ld,\n", component_id);
+	fprintf(output_data, "    \"mpi-rank\"               : %ld,\n", mpi_rank);
+	fprintf(output_data, "    \"hostname\"               : \"%s\",\n", hostname);
 	fprintf(output_data, "    \"total-app-time\"         : %.8f,\n", totalExecuteTime);
 	fprintf(output_data, "    \"total-kernel-times\"     : %.8f,\n", kernelTimes);
 	fprintf(output_data, "    \"total-non-kernel-times\" : %.8f,\n",
 		(totalExecuteTime - kernelTimes));
+
+	free(hostname);
 
 	const double percentKokkos = (kernelTimes / totalExecuteTime) * 100.0;
 	fprintf(output_data, "    \"percent-in-kernels\"     : %.2f,\n", percentKokkos);
@@ -215,6 +245,8 @@ extern "C" void kokkosp_finalize_library() {
 	if (upload_url) {
 		ldms_upload(upload_url, fileOutput, 0);
 	}
+	if (!keep_file)
+		unlink(fileOutput);
 }
 
 extern "C" void kokkosp_begin_parallel_for(const char* name, const uint32_t devID, uint64_t* kID) {
